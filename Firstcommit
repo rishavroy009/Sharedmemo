@@ -1,0 +1,88 @@
+#include <iostream>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <cstring>
+#include <fstream>
+
+const int SHM_SIZE = 10 * 1024 * 1024; // 10 MB
+
+int main() {
+    // Key for shared memory segment
+    key_t key = ftok("shmfile",65);
+
+    // Create shared memory segment
+    int shmid = shmget(key, SHM_SIZE, 0666|IPC_CREAT);
+    if (shmid < 0) {
+        std::cerr << "shmget error" << std::endl;
+        return 1;
+    }
+
+    // Attach to the shared memory
+    char *data = (char*) shmat(shmid, nullptr, 0);
+    if (data == (char*)(-1)) {
+        std::cerr << "shmat error" << std::endl;
+        return 1;
+    }
+
+    // Read data from file
+    std::ifstream inputFile("input.txt", std::ios::in | std::ios::binary);
+    if (!inputFile) {
+        std::cerr << "Cannot open input file." << std::endl;
+        return 1;
+    }
+    inputFile.read(data, SHM_SIZE);
+    inputFile.close();
+
+    std::cout << "Data written to shared memory." << std::endl;
+
+    // Detach from shared memory
+    shmdt(data);
+
+    return 0;
+}
+//receiver
+#include <iostream>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <cstring>
+#include <fstream>
+
+const int SHM_SIZE = 10 * 1024 * 1024; // 10 MB
+
+int main() {
+    // Key for shared memory segment
+    key_t key = ftok("shmfile",65);
+
+    // Locate the shared memory segment
+    int shmid = shmget(key, SHM_SIZE, 0666);
+    if (shmid < 0) {
+        std::cerr << "shmget error" << std::endl;
+        return 1;
+    }
+
+    // Attach to the shared memory
+    char *data = (char*) shmat(shmid, nullptr, 0);
+    if (data == (char*)(-1)) {
+        std::cerr << "shmat error" << std::endl;
+        return 1;
+    }
+
+    // Write data to output file
+    std::ofstream outputFile("output.txt", std::ios::out | std::ios::binary);
+    if (!outputFile) {
+        std::cerr << "Cannot open output file." << std::endl;
+        return 1;
+    }
+    outputFile.write(data, SHM_SIZE);
+    outputFile.close();
+
+    std::cout << "Data read from shared memory and written to file." << std::endl;
+
+    // Detach from shared memory
+    shmdt(data);
+
+    // Destroy the shared memory segment
+    shmctl(shmid, IPC_RMID, nullptr);
+
+    return 0;
+}
